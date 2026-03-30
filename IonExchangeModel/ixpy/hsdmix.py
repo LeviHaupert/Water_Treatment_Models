@@ -69,17 +69,23 @@ def approx_Jac_struc(nr, NION, nz):
     
     Jac_struc = np.zeros((NEQ, NEQ))
     
-    # Diffusion zone
+    # Diffusion/exchange zone
     Jac_struc[nzni:, nzni:] += np.eye(NEQ-nzni, NEQ-nzni, k=0)
-    for ii in range(1, nr):
-        Jac_struc[nzni:, nzni:] += np.eye(NEQ-nzni, NEQ-nzni, k=(ii*nzni))
-        Jac_struc[nzni:, nzni:] += np.eye(NEQ-nzni, NEQ-nzni, k=-(ii*nzni))
+    
+    # No axial interactions in beads
+    for ii in range(NION*(1+nr)-1):
+        ii = ii+1
+      
+        # just do the whole block and zero out later. It's easier.
+        Jac_struc[:, :] += np.eye(NEQ, NEQ, k=nz*ii)
+        Jac_struc[:, :] += np.eye(NEQ, NEQ, k=-nz*ii)
+    
+    # zero out liquid phase
+    Jac_struc[0:nzni,:] = 0.0        
     
     # Block off corners (ion exchange zones)
-    Jac_struc[0:nzni, 0:nzni] = 1.0
-    Jac_struc[0:nzni, (nr)*nzni:] = 1.0
-    Jac_struc[(nr)*nzni:, 0:nzni] = 1.0
-    Jac_struc[(nr)*nzni:, (nr)*nzni:] = 1.0
+    Jac_struc[0:nzni, 0:nzni] = 1.0 # advection zones
+    Jac_struc[0:nzni, (nr)*nzni:] = 1.0 # bead surface
     
     return Jac_struc
 
@@ -510,9 +516,7 @@ class HSDMIX:
                 Ds_iii = self.ions.iloc[iii]['Ds']
                 dq_dT[:, iii, :] =  Ds_iii * t_half / rb**2 * Br_q[:, iii, :]   
 
-            # # explicitly doing implicit chloride LMH
-            # dq_dT[:, 0, :] = -dq_dT[:, 1:, :].sum(axis=1) # XXX: Why doesn't work?
-            # print(dq_dT[-2, :, -1].sum()) # Why isn't that zero?
+            dq_dT[:, 0, :] = -dq_dT[:, 1:, :].sum(axis=1) # presaturant diffusion (implicit)
 
             # intermediate term for dq_dT at bead surface      HSDMIX   
             dq_dT_swap = np.swapaxes(dq_dT[:SURF, :, :],0,1)
